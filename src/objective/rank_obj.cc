@@ -222,6 +222,63 @@ class LambdaRankObjNDCG : public LambdaRankObj {
   }
 };
 
+// ERR lambda rank
+class LambdaRankObjERR : public LambdaRankObj {
+protected:
+  void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
+                       std::vector<LambdaPair> *io_pairs) override {
+  std::vector<LambdaPair> &pairs = *io_pairs;
+
+    for (size_t i = 0; i < pairs.size(); ++i) {
+
+      unsigned pos_idx = pairs[i].pos_index;
+      unsigned neg_idx = pairs[i].neg_index;
+
+      unsigned pos_label = static_cast<unsigned>(sorted_list[pos_idx].label);
+      unsigned neg_label = static_cast<unsigned>(sorted_list[neg_idx].label);
+
+      std::vector<unsigned> labels(sorted_list.size());
+      for (size_t j = 0; j < sorted_list.size(); ++j) {
+        labels[j] = static_cast<unsigned>(sorted_list[j].label);
+      }
+      float original = CalcERR(labels);
+      labels[neg_idx] = pos_label;
+      labels[pos_idx] = neg_label;
+      float changed = CalcERR(labels);
+      float delta = (original - changed);
+      if (delta < 0.0f) delta = - delta;
+      pairs[i].weight = delta;
+    }
+  }
+
+  inline static float CalcR(unsigned label, unsigned max_label) {
+    float r = ((1 << label) - 1) / (1 << max_label);
+    return r;
+  }
+
+  inline static float CalcERR(const std::vector<unsigned> &labels) {
+    double ERR = 0.0;
+    double p = 1.0;
+
+    unsigned max_label = 0;
+    for (size_t i = 0; i < labels.size(); ++i) {
+      const unsigned label = labels[i];
+      if (label > max_label) {
+        max_label = label;
+      }
+    }
+
+    for (size_t i = 0; i < labels.size(); ++i) {
+      const unsigned label = labels[i];
+      double r = CalcR(label, max_label);
+      ERR += p * r / (i + 1);
+      p *= (1 - r);
+    }
+
+    return static_cast<float>(ERR);
+  }
+};
+
 class LambdaRankObjMAP : public LambdaRankObj {
  protected:
   struct MAPStats {
@@ -309,7 +366,7 @@ class LambdaRankObjMAP : public LambdaRankObj {
   }
 };
 
-// register the ojective functions
+// register the objective functions
 DMLC_REGISTER_PARAMETER(LambdaRankParam);
 
 XGBOOST_REGISTER_OBJECTIVE(PairwieRankObj, "rank:pairwise")
@@ -319,6 +376,10 @@ XGBOOST_REGISTER_OBJECTIVE(PairwieRankObj, "rank:pairwise")
 XGBOOST_REGISTER_OBJECTIVE(LambdaRankNDCG, "rank:ndcg")
 .describe("LambdaRank with NDCG as objective.")
 .set_body([]() { return new LambdaRankObjNDCG(); });
+
+XGBOOST_REGISTER_OBJECTIVE(LambdaRankERR, "rank:err")
+.describe("LambdaRank with ERR as objective.")
+.set_body([]() { return new LambdaRankObjERR(); });
 
 XGBOOST_REGISTER_OBJECTIVE(LambdaRankObjMAP, "rank:map")
 .describe("LambdaRank with MAP as objective.")

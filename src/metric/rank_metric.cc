@@ -278,6 +278,45 @@ struct EvalNDCG : public EvalRankList{
   }
 };
 
+/*! \brief NDCG: Normalized Discounted Cumulative Gain at N */
+struct EvalERR : public EvalRankList{
+public:
+  explicit EvalERR(const char *name) : EvalRankList("err", name) {}
+
+  private: float CalcR(unsigned label, unsigned max_label) const {
+    float r = ((1 << label) - 1) / (1 << max_label);
+    return r;
+  }
+
+  protected:
+  inline float CalcERR(const std::vector<std::pair<float, unsigned> > &rec) const {
+    double ERR = 0.0;
+    double p = 1.0;
+
+    unsigned max_label = 0;
+    for (size_t i = 0; i < rec.size() && i < this->topn_; ++i) {
+      const unsigned label = rec[i].second;
+      if (label > max_label) {
+        max_label = label;
+      }
+    }
+
+    for (size_t i = 0; i < rec.size() && i < this->topn_; ++i) {
+      const unsigned label = rec[i].second;
+      double r = CalcR(label, max_label);
+      ERR += p * r / (i + 1);
+      p *= (1 - r);
+    }
+
+    return static_cast<float>(ERR);
+  }
+  virtual float EvalMetric(std::vector<std::pair<float, unsigned> > &rec) const { // NOLINT(*)
+    std::stable_sort(rec.begin(), rec.end(), common::CmpFirst);
+    float err = this->CalcERR(rec);
+    return err;
+  }
+};
+
 /*! \brief Mean Average Precision at N, for both classification and rank */
 struct EvalMAP : public EvalRankList {
  public:
@@ -324,6 +363,10 @@ XGBOOST_REGISTER_METRIC(Precision, "pre")
 XGBOOST_REGISTER_METRIC(NDCG, "ndcg")
 .describe("ndcg@k for rank.")
 .set_body([](const char* param) { return new EvalNDCG(param); });
+
+XGBOOST_REGISTER_METRIC(ERR, "err")
+.describe("err for rank.")
+.set_body([](const char* param) { return new EvalERR(param); });
 
 XGBOOST_REGISTER_METRIC(MAP, "map")
 .describe("map@k for rank.")
