@@ -251,8 +251,8 @@ protected:
     }
   }
 
-  inline static float CalcR(unsigned label, unsigned max_label) {
-    float r = ((1 << label) - 1) / (1 << max_label);
+  inline static double CalcR(unsigned label, unsigned max_label) {
+    double r = ((1 << label) - 1.0) / (1 << max_label);
     return r;
   }
 

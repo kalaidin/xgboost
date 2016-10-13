@@ -278,13 +278,13 @@ struct EvalNDCG : public EvalRankList{
   }
 };
 
-/*! \brief NDCG: Normalized Discounted Cumulative Gain at N */
+/*! \brief ERR: Expected Reciprocal Rank at N */
 struct EvalERR : public EvalRankList{
 public:
   explicit EvalERR(const char *name) : EvalRankList("err", name) {}
 
-  private: float CalcR(unsigned label, unsigned max_label) const {
-    float r = ((1 << label) - 1) / (1 << max_label);
+  private: double CalcR(unsigned label, unsigned max_label) const {
+    double r = ((1 << label) - 1.0) / (1 << max_label);
     return r;
   }
 
