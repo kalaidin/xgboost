@@ -206,7 +206,7 @@ struct EvalRankList : public Metric {
     using namespace std;  // NOLINT(*)
     minus_ = false;
     if (param != nullptr) {
-      LOG(INFO) << "max_label read  " << param;
+      //LOG(INFO) << "max_label read  " << param;
       std::ostringstream os;
       os << name << '@' << param;
       name_ = os.str();
@@ -223,7 +223,7 @@ struct EvalRankList : public Metric {
       topn_ = std::numeric_limits<unsigned>::max();
       max_label_ = 0;
     }
-    LOG(INFO) << "max_label read " << max_label_;
+    //LOG(INFO) << "max_label read " << max_label_;
   }
 
   /*! \return evaluation metric, given the pair_sort record, (pred,label) */
@@ -300,7 +300,7 @@ public:
     double ERR = 0.0;
     double p = 1.0;
 
-    LOG(INFO) << "max_label: " << this->max_label_;
+    //LOG(INFO) << "max_label: " << this->max_label_;
 
     unsigned max_label = this->max_label_;
     if (max_label == 0) {

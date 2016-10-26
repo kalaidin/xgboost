@@ -112,7 +112,7 @@ class LambdaRankObj : public ObjFunction {
           float g = p - 1.0f;
           float h = std::max(p * (1.0f - p), eps);
           // accumulate gradient and hessian in both pid, and nid
-          LOG(INFO) << "grad: " << g * w;
+          //LOG(INFO) << "grad: " << g * w;
           gpair[pos.rindex].grad += g * w;
           gpair[pos.rindex].hess += 2.0f * w * h;
           gpair[neg.rindex].grad -= g * w;
@@ -184,7 +184,7 @@ class LambdaRankObjNDCG : public LambdaRankObj {
     std::vector<LambdaPair> &pairs = *io_pairs;
 
     for (size_t i = 0; i < sorted_list.size(); ++i) {
-      LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
+      //LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
     }
 
     float IDCG;
@@ -209,7 +209,7 @@ class LambdaRankObjNDCG : public LambdaRankObj {
         float neg_loginv = 1.0f / std::log(neg_idx + 2.0f);
         int pos_label = static_cast<int>(sorted_list[pos_idx].label);
         int neg_label = static_cast<int>(sorted_list[neg_idx].label);
-        LOG(INFO) << "label pair: " << pos_label << neg_label;
+        //LOG(INFO) << "label pair: " << pos_label << neg_label;
         float original =
             ((1 << pos_label) - 1) * pos_loginv + ((1 << neg_label) - 1) * neg_loginv;
         float changed  =
@@ -217,7 +217,7 @@ class LambdaRankObjNDCG : public LambdaRankObj {
         float delta = (original - changed) * IDCG;
         if (delta < 0.0f) delta = - delta;
         pairs[i].weight = delta;
-        LOG(INFO) << "delta: " << delta;
+        //LOG(INFO) << "delta: " << delta;
       }
     }
   }
@@ -241,7 +241,7 @@ protected:
     std::vector<LambdaPair> &pairs = *io_pairs;
 
     for (size_t i = 0; i < sorted_list.size(); ++i) {
-      LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
+      //LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
     }
 
     for (size_t i = 0; i < pairs.size(); ++i) {
@@ -252,7 +252,7 @@ protected:
       unsigned pos_label = static_cast<unsigned>(sorted_list[pos_idx].label);
       unsigned neg_label = static_cast<unsigned>(sorted_list[neg_idx].label);
 
-      LOG(INFO) << "label pair: " << pos_label << neg_label;
+      //LOG(INFO) << "label pair: " << pos_label << neg_label;
 
       std::vector<unsigned> labels(sorted_list.size());
       for (size_t j = 0; j < sorted_list.size(); ++j) {
@@ -265,7 +265,7 @@ protected:
       float delta = (original - changed);
       if (delta < 0.0f) delta = - delta;
       pairs[i].weight = delta;
-      LOG(INFO) << "delta: " << delta;
+      //LOG(INFO) << "delta: " << delta;
     }
   }
 
@@ -294,7 +294,7 @@ protected:
       p *= (1 - r);
     }
 
-    LOG(INFO) << "ERR: " << ERR;
+    //LOG(INFO) << "ERR: " << ERR;
 
     return static_cast<float>(ERR);
   }
