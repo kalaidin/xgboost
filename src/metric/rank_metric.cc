@@ -206,11 +206,14 @@ struct EvalRankList : public Metric {
     using namespace std;  // NOLINT(*)
     minus_ = false;
     if (param != nullptr) {
+      LOG(INFO) << "max_label read  " << param;
       std::ostringstream os;
       os << name << '@' << param;
       name_ = os.str();
-      if (sscanf(param, "%u[-]?", &topn_) != 1) {
+      int res = sscanf(param, "%u@%u[-]?", &topn_, &max_label_);
+      if (res == 0) {
         topn_ = std::numeric_limits<unsigned>::max();
+        max_label_ = 0;
       }
       if (param[strlen(param) - 1] == '-') {
         minus_ = true;
@@ -218,13 +221,17 @@ struct EvalRankList : public Metric {
     } else {
       name_ = name;
       topn_ = std::numeric_limits<unsigned>::max();
+      max_label_ = 0;
     }
+    LOG(INFO) << "max_label read " << max_label_;
   }
+
   /*! \return evaluation metric, given the pair_sort record, (pred,label) */
   virtual float EvalMetric(std::vector<std::pair<float, unsigned> > &pair_sort) const = 0; // NOLINT(*)
 
  protected:
   unsigned topn_;
+  unsigned max_label_;
   std::string name_;
   bool minus_;
 };
@@ -232,7 +239,7 @@ struct EvalRankList : public Metric {
 /*! \brief Precision at N, for both classification and rank */
 struct EvalPrecision : public EvalRankList{
  public:
-  explicit EvalPrecision(const char *name) : EvalRankList("pre", name) {}
+  explicit EvalPrecision(const char *param) : EvalRankList("pre", param) {}
 
  protected:
   virtual float EvalMetric(std::vector< std::pair<float, unsigned> > &rec) const {
@@ -249,7 +256,7 @@ struct EvalPrecision : public EvalRankList{
 /*! \brief NDCG: Normalized Discounted Cumulative Gain at N */
 struct EvalNDCG : public EvalRankList{
  public:
-  explicit EvalNDCG(const char *name) : EvalRankList("ndcg", name) {}
+  explicit EvalNDCG(const char *param) : EvalRankList("ndcg", param) {}
 
  protected:
   inline float CalcDCG(const std::vector<std::pair<float, unsigned> > &rec) const {
@@ -281,7 +288,7 @@ struct EvalNDCG : public EvalRankList{
 /*! \brief ERR: Expected Reciprocal Rank at N */
 struct EvalERR : public EvalRankList{
 public:
-  explicit EvalERR(const char *name) : EvalRankList("err", name) {}
+  explicit EvalERR(const char *param) : EvalRankList("err", param) {}
 
   private: double CalcR(unsigned label, unsigned max_label) const {
     double r = ((1 << label) - 1.0) / (1 << max_label);
@@ -293,11 +300,15 @@ public:
     double ERR = 0.0;
     double p = 1.0;
 
-    unsigned max_label = 0;
-    for (size_t i = 0; i < rec.size() && i < this->topn_; ++i) {
-      const unsigned label = rec[i].second;
-      if (label > max_label) {
-        max_label = label;
+    LOG(INFO) << "max_label: " << this->max_label_;
+
+    unsigned max_label = this->max_label_;
+    if (max_label == 0) {
+      for (size_t i = 0; i < rec.size() && i < this->topn_; ++i) {
+        const unsigned label = rec[i].second;
+        if (label > max_label) {
+          max_label = label;
+        }
       }
     }
 
@@ -320,7 +331,7 @@ public:
 /*! \brief Mean Average Precision at N, for both classification and rank */
 struct EvalMAP : public EvalRankList {
  public:
-  explicit EvalMAP(const char *name) : EvalRankList("map", name) {}
+  explicit EvalMAP(const char *param) : EvalRankList("map", param) {}
 
  protected:
   virtual float EvalMetric(std::vector< std::pair<float, unsigned> > &rec) const {

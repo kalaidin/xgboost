@@ -21,10 +21,13 @@ DMLC_REGISTRY_FILE_TAG(rank_obj);
 struct LambdaRankParam : public dmlc::Parameter<LambdaRankParam> {
   int num_pairsample;
   float fix_list_weight;
+  unsigned max_label;
   // declare parameters
   DMLC_DECLARE_PARAMETER(LambdaRankParam) {
     DMLC_DECLARE_FIELD(num_pairsample).set_lower_bound(1).set_default(1)
         .describe("Number of pair generated for each instance.");
+    DMLC_DECLARE_FIELD(max_label).set_lower_bound(0).set_default(0)
+              .describe("Max relevance");
     DMLC_DECLARE_FIELD(fix_list_weight).set_lower_bound(0.0f).set_default(0.0f)
         .describe("Normalize the weight of each list by this value,"
                   " if equals 0, no effect will happen");
@@ -94,7 +97,7 @@ class LambdaRankObj : public ObjFunction {
           i = j;
         }
         // get lambda weight for the pairs
-        this->GetLambdaWeight(lst, &pairs);
+        this->GetLambdaWeight(lst, &pairs, param_.max_label);
         // rescale each gradient and hessian so that the lst have constant weighted
         float scale = 1.0f / param_.num_pairsample;
         if (param_.fix_list_weight != 0.0f) {
@@ -109,6 +112,7 @@ class LambdaRankObj : public ObjFunction {
           float g = p - 1.0f;
           float h = std::max(p * (1.0f - p), eps);
           // accumulate gradient and hessian in both pid, and nid
+          LOG(INFO) << "grad: " << g * w;
           gpair[pos.rindex].grad += g * w;
           gpair[pos.rindex].hess += 2.0f * w * h;
           gpair[neg.rindex].grad -= g * w;
@@ -160,7 +164,7 @@ class LambdaRankObj : public ObjFunction {
    * \param io_pairs record of pairs, containing the pairs to fill in weights
    */
   virtual void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
-                               std::vector<LambdaPair> *io_pairs) = 0;
+                               std::vector<LambdaPair> *io_pairs, unsigned max_label) = 0;
 
  private:
   LambdaRankParam param_;
@@ -169,15 +173,20 @@ class LambdaRankObj : public ObjFunction {
 class PairwiseRankObj: public LambdaRankObj{
  protected:
   void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
-                       std::vector<LambdaPair> *io_pairs) override {}
+                       std::vector<LambdaPair> *io_pairs, unsigned max_label) override {}
 };
 
 // beta version: NDCG lambda rank
 class LambdaRankObjNDCG : public LambdaRankObj {
  protected:
   void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
-                       std::vector<LambdaPair> *io_pairs) override {
+                       std::vector<LambdaPair> *io_pairs, unsigned max_label) override {
     std::vector<LambdaPair> &pairs = *io_pairs;
+
+    for (size_t i = 0; i < sorted_list.size(); ++i) {
+      LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
+    }
+
     float IDCG;
     {
       std::vector<float> labels(sorted_list.size());
@@ -200,6 +209,7 @@ class LambdaRankObjNDCG : public LambdaRankObj {
         float neg_loginv = 1.0f / std::log(neg_idx + 2.0f);
         int pos_label = static_cast<int>(sorted_list[pos_idx].label);
         int neg_label = static_cast<int>(sorted_list[neg_idx].label);
+        LOG(INFO) << "label pair: " << pos_label << neg_label;
         float original =
             ((1 << pos_label) - 1) * pos_loginv + ((1 << neg_label) - 1) * neg_loginv;
         float changed  =
@@ -207,6 +217,7 @@ class LambdaRankObjNDCG : public LambdaRankObj {
         float delta = (original - changed) * IDCG;
         if (delta < 0.0f) delta = - delta;
         pairs[i].weight = delta;
+        LOG(INFO) << "delta: " << delta;
       }
     }
   }
@@ -226,8 +237,12 @@ class LambdaRankObjNDCG : public LambdaRankObj {
 class LambdaRankObjERR : public LambdaRankObj {
 protected:
   void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
-                       std::vector<LambdaPair> *io_pairs) override {
+                       std::vector<LambdaPair> *io_pairs, unsigned max_label) override {
     std::vector<LambdaPair> &pairs = *io_pairs;
+
+    for (size_t i = 0; i < sorted_list.size(); ++i) {
+      LOG(INFO) << "scores: " << sorted_list[i].label << sorted_list[i].pred;
+    }
 
     for (size_t i = 0; i < pairs.size(); ++i) {
 
@@ -237,17 +252,20 @@ protected:
       unsigned pos_label = static_cast<unsigned>(sorted_list[pos_idx].label);
       unsigned neg_label = static_cast<unsigned>(sorted_list[neg_idx].label);
 
+      LOG(INFO) << "label pair: " << pos_label << neg_label;
+
       std::vector<unsigned> labels(sorted_list.size());
       for (size_t j = 0; j < sorted_list.size(); ++j) {
         labels[j] = static_cast<unsigned>(sorted_list[j].label);
       }
-      float original = CalcERR(labels);
+      float original = CalcERR(labels, max_label);
       labels[neg_idx] = pos_label;
       labels[pos_idx] = neg_label;
-      float changed = CalcERR(labels);
+      float changed = CalcERR(labels, max_label);
       float delta = (original - changed);
       if (delta < 0.0f) delta = - delta;
       pairs[i].weight = delta;
+      LOG(INFO) << "delta: " << delta;
     }
   }
 
@@ -256,15 +274,16 @@ protected:
     return r;
   }
 
-  inline static float CalcERR(const std::vector<unsigned> &labels) {
+  inline static float CalcERR(const std::vector<unsigned> &labels, unsigned max_label) {
     double ERR = 0.0;
     double p = 1.0;
 
-    unsigned max_label = 0;
-    for (size_t i = 0; i < labels.size(); ++i) {
-      const unsigned label = labels[i];
-      if (label > max_label) {
-        max_label = label;
+    if (max_label == 0) {
+      for (size_t i = 0; i < labels.size(); ++i) {
+        const unsigned label = labels[i];
+        if (label > max_label) {
+          max_label = label;
+        }
       }
     }
 
@@ -274,6 +293,8 @@ protected:
       ERR += p * r / (i + 1);
       p *= (1 - r);
     }
+
+    LOG(INFO) << "ERR: " << ERR;
 
     return static_cast<float>(ERR);
   }
@@ -354,7 +375,7 @@ class LambdaRankObjMAP : public LambdaRankObj {
     }
   }
   void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
-                       std::vector<LambdaPair> *io_pairs) override {
+                       std::vector<LambdaPair> *io_pairs, unsigned max_label) override {
     std::vector<LambdaPair> &pairs = *io_pairs;
     std::vector<MAPStats> map_stats;
     GetMAPStats(sorted_list, &map_stats);
