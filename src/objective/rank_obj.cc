@@ -227,7 +227,7 @@ class LambdaRankObjERR : public LambdaRankObj {
 protected:
   void GetLambdaWeight(const std::vector<ListEntry> &sorted_list,
                        std::vector<LambdaPair> *io_pairs) override {
-  std::vector<LambdaPair> &pairs = *io_pairs;
+    std::vector<LambdaPair> &pairs = *io_pairs;
 
     for (size_t i = 0; i < pairs.size(); ++i) {
 
